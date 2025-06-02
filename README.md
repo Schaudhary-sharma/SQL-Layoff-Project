@@ -50,11 +50,14 @@ SELECT *,
   ) AS ROW_NUM
 FROM layoffs_staging;
 ```
-
+```sql
 DELETE FROM layoffs_staging2 WHERE ROW_NUM > 1;
+```
 
-SELECT * FROM layoffs_staging2 WHERE ROW_NUM > 1;  -- Should return 0 rows
-
+```sql
+SELECT * FROM layoffs_staging2
+WHERE ROW_NUM > 1;  -- Should return 0 rows
+```
 
 Outcome:
 Duplicates removed, ensuring each layoff event is uniquely counted.
@@ -65,15 +68,20 @@ Converted percentage_laid_off from text like "15%" to a decimal numeric type.
 
 Converted date from text format to DATE datatype for easy querying.
 
+```sql
 ALTER TABLE layoffs_staging2 ADD COLUMN percentage_laid_off_num DECIMAL(5,2);
-
+```
+```sql
 UPDATE layoffs_staging2
 SET percentage_laid_off_num = CAST(REPLACE(percentage_laid_off, '%', '') AS DECIMAL(5,2));
-
+```
+```sql
 ALTER TABLE layoffs_staging2 ADD COLUMN date_clean DATE;
-
+```
+```sql
 UPDATE layoffs_staging2
 SET date_clean = STR_TO_DATE(`date`, '%Y-%m-%d');
+```
 
 Why?
 Numeric percentages enable calculations like averages. Proper dates allow time-series analysis.
@@ -82,25 +90,26 @@ Step 4: Handle Missing or Null Values
 Checked for missing values in critical columns.
 
 Removed rows missing essential data like company name or date.
-
+```sql
 SELECT 
   COUNT(*) AS total_rows,
   COUNT(total_laid_off) AS total_laid_off_not_null,
   COUNT(percentage_laid_off_num) AS percentage_not_null,
   COUNT(date_clean) AS date_not_null
 FROM layoffs_staging2;
-
+```
+```sql
 DELETE FROM layoffs_staging2
 WHERE company IS NULL OR company = ''
 OR date_clean IS NULL;
-
+```
 
 Outcome:
 Data completeness ensured for accurate analysis.
 
 Step 5: Remove Unnecessary Columns (Optional)
 Created a final clean table with only needed columns for faster querying and analysis.
-
+```sql
 CREATE TABLE layoffs_clean AS
 SELECT
   company,
@@ -113,7 +122,7 @@ SELECT
   country,
   funds_raised_millions
 FROM layoffs_staging2;
-
+```
 
 Why?
 Simplifies working with clean, relevant data.
@@ -131,8 +140,10 @@ Created a simplified, clean table ready for analysis.
 Phase 2: Data Analysis(EDA)
 
 1. When did layoffs begin and how long did they last?
+```sql
 SELECT MIN(`date`), MAX(`date`)
 FROM layoffs_staging2;
+```
 
 Insight:
 Layoffs started in March 2020, coinciding with the pandemic onset, and continue through March 2023, showing a prolonged multi-year wave.
@@ -141,23 +152,27 @@ Impact:
 Layoffs persisted beyond the initial pandemic shock due to ongoing economic challenges.
 
 2. Which year had the most layoffs?
+
+```sql
 SELECT YEAR(`date`), SUM(total_laid_off)
 FROM layoffs_staging2
 GROUP BY 1
 ORDER BY 1 DESC;
+```
 
 Insight:
 
-2022 had the highest layoffs (~160k).
+a. 2022 had the highest layoffs (~160k).
 
-2023 (only 3 months) had 125k layoffs, showing continued pressure.
+b. 2023 (only 3 months) had 125k layoffs, showing continued pressure.
 
-2020 had an initial spike (~80k), while 2021 saw recovery (~16k layoffs).
+c. 2020 had an initial spike (~80k), while 2021 saw recovery (~16k layoffs).
 
 Impact:
 Reflects a "bust-boom-bust" economic pattern from pandemic shock to recovery and overexpansion corrections.
 
 3. Are layoffs accelerating or decelerating?
+```sql
 WITH Rolling_Total AS (
   SELECT SUBSTRING(`date`,1,7) AS `Month`, SUM(total_laid_off) AS total_laid_off
   FROM layoffs_staging2
@@ -167,6 +182,7 @@ WITH Rolling_Total AS (
 SELECT `Month`, total_laid_off,
        SUM(total_laid_off) OVER(ORDER BY `Month`) AS rolling_total
 FROM Rolling_Total;
+```
 
 Impact:
 Layoffs surged in late 2022 and early 2023, with cumulative totals steadily rising — no clear signs of stabilization by March 2023.
@@ -175,23 +191,25 @@ Takeaway:
 The market correction remains ongoing, reflecting broader macroeconomic stress.
 
 4. Who are the biggest culprits? (Top Companies)
+```sql
 SELECT company, SUM(total_laid_off)
 FROM layoffs_staging2
 GROUP BY company
 ORDER BY 2 DESC;
-
+```
 Top offenders: Amazon, Google, Meta, Salesforce, Microsoft.
 
 Impact:
 Layoffs are not just startup phenomena but affect tech giants — a corporate recalibration at the highest level.
 
 5. Did any companies lay off 100% of their workforce?
+```sql
 SELECT *
 FROM layoffs_staging2
 WHERE percentage_laid_off = 1
 ORDER BY total_laid_off DESC
 LIMIT 3;
-
+```
 Notable full shutdowns: Katerra, Butler Hospitality, Deliv.
 
 Impact:
@@ -199,12 +217,12 @@ Complete shutdowns of large companies highlight vulnerabilities of heavily funde
 
 
 6. Were failed companies well-funded?
-
+```sql
 SELECT *
 FROM layoffs_staging2
 WHERE percentage_laid_off = 1
 ORDER BY funds_raised_millions DESC;
-
+```
 
 Examples: Britishvolt ($2.4B), Quibi ($1.8B), Deliveroo Australia ($1.7B).
 
@@ -212,11 +230,13 @@ Impact:
 High funding doesn’t guarantee survival — highlights inefficiencies and hype in the startup ecosystem.
 
 7. Which industries were hit hardest?
+```sql
 SELECT industry, SUM(total_laid_off) AS industry_laid_off,
        (SUM(total_laid_off)/383320)*100 AS Percentage_of_total_laid_off
 FROM layoffs_staging2
 GROUP BY industry
 ORDER BY 2 DESC;
+```
 
 Top sectors: Consumer, Retail (over 22% combined layoffs).
 
@@ -224,24 +244,26 @@ Impact:
 Demand-driven industries were most vulnerable to economic slowdown.
 
 8. Where were layoffs concentrated geographically?
+```sql
 SELECT country, SUM(total_laid_off),
        (SUM(total_laid_off)/383320)*100 AS Percentage_of_total_laid_off
 FROM layoffs_staging2
 GROUP BY country
 ORDER BY 2 DESC;
-
+```
 Top countries: United States (~67%), India (~9%).
 
 Impact:
 Silicon Valley dominates the layoff numbers; India follows but at a much smaller scale proportionally.
 
 9. Which companies were most affected in the US and India?
+```sql
 SELECT country, company, SUM(total_laid_off)
 FROM layoffs_staging2
 WHERE country IN ('United States', 'India')
 GROUP BY country, company
 ORDER BY 3 DESC;
-
+```
 India: Byju's, Swiggy, Ola.
 
 USA: Amazon, Google, Meta.
@@ -250,11 +272,12 @@ Impact:
 EdTech and gig economy startups were hardest hit in India; US tech giants aggressively cut workforce.
 
 10. Which funding stages saw the most layoffs?
+```sql
 SELECT stage, SUM(total_laid_off)
 FROM layoffs_staging2
 GROUP BY 1
 ORDER BY 2 DESC;
-
+```
 Insight:
 Post-IPO companies laid off the most employees (204k+).
 
@@ -262,10 +285,12 @@ Impact:
 Mature companies face shareholder pressures to reduce costs during downturns.
 
 Bonus: Year-on-Year Breakdown by Company
+```sql
 SELECT company, YEAR(`date`), SUM(total_laid_off)
 FROM layoffs_staging2
 GROUP BY 1, 2
 ORDER BY 3 DESC;
+```
 
 Examples:
 
@@ -279,6 +304,7 @@ Impact:
 Identifies peak layoff years per company — useful for investors and analysts.
 
 Bonus: Top 5 Companies Per Year
+```sql
 WITH Company_Year (company, years, total_laid_off) AS (
   SELECT company, YEAR(`date`), SUM(total_laid_off)
   FROM layoffs_staging2
@@ -291,7 +317,7 @@ company_year_rank AS (
 SELECT *
 FROM company_year_rank
 WHERE Ranking <= 5;
-
+```
 
 Use Case:
 Track top layoff contributors yearly to monitor company stability and talent sustainability risks.
