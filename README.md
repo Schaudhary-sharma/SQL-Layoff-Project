@@ -26,6 +26,7 @@ Used ROW_NUMBER() window function over all columns to detect exact duplicates.
 
 Retained only one record per duplicate set, deleting extras.
 
+```sql
 CREATE TABLE layoffs_staging2 (
   company TEXT,
   location TEXT,
@@ -38,7 +39,9 @@ CREATE TABLE layoffs_staging2 (
   funds_raised_millions INT DEFAULT NULL,
   ROW_NUM INT
 );
+```
 
+```sql
 INSERT INTO layoffs_staging2
 SELECT *,
   ROW_NUMBER() OVER(
@@ -46,6 +49,7 @@ SELECT *,
     ORDER BY company
   ) AS ROW_NUM
 FROM layoffs_staging;
+```
 
 DELETE FROM layoffs_staging2 WHERE ROW_NUM > 1;
 
